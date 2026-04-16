@@ -1,0 +1,8 @@
+lib/
+.build/
+testdata/
+*.a
+docs/
+examples/bin
+*.onnx
+.DS_Store
