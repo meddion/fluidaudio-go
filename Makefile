@@ -16,8 +16,8 @@ test: swift
 test-integration: swift
 	go test -v -count=1 -tags integration .
 
-examples: swift
-	mkdir -p ./examples/bin && go build -o ./examples/bin ./examples/...
+example-diarize: swift
+	go run ./examples/diarize/main.go testdata/test.wav
 
 clean:
 	rm -rf lib

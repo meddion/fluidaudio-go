@@ -49,54 +49,6 @@ func TestSystemInfo(t *testing.T) {
 		info.Platform, info.ChipName, info.MemoryGB, info.AppleSilicon)
 }
 
-func TestASRAvailability(t *testing.T) {
-	fa, err := New()
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-	defer fa.Close()
-
-	if fa.IsASRAvailable() {
-		t.Error("ASR should not be available before initialization")
-	}
-}
-
-func TestStreamingASRAvailability(t *testing.T) {
-	fa, err := New()
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-	defer fa.Close()
-
-	if fa.IsStreamingASRAvailable() {
-		t.Error("Streaming ASR should not be available before initialization")
-	}
-}
-
-func TestVADAvailability(t *testing.T) {
-	fa, err := New()
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-	defer fa.Close()
-
-	if fa.IsVADAvailable() {
-		t.Error("VAD should not be available before initialization")
-	}
-}
-
-func TestDiarizationAvailability(t *testing.T) {
-	fa, err := New()
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-	defer fa.Close()
-
-	if fa.IsDiarizationAvailable() {
-		t.Error("Diarization should not be available before initialization")
-	}
-}
-
 func TestIsAppleSilicon(t *testing.T) {
 	fa, err := New()
 	if err != nil {

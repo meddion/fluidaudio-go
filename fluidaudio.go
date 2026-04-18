@@ -28,7 +28,7 @@ type FluidAudio struct {
 
 // New creates a new FluidAudio bridge instance.
 func New() (*FluidAudio, error) {
-	ptr := C.fluidaudio_bridge_create()
+	ptr := C.fluidaudio_diarizer_create()
 	if ptr == nil {
 		return nil, &FluidAudioError{Code: -1, Message: "bridge_create returned nil"}
 	}
@@ -44,416 +44,97 @@ func (f *FluidAudio) Close() {
 	if f.done || f.ptr == nil {
 		return
 	}
-	C.fluidaudio_bridge_destroy(f.ptr)
+	C.fluidaudio_diarizer_destroy(f.ptr)
 	f.ptr = nil
 	f.done = true
-}
-
-// --- ASR ---
-
-// InitASR initializes the ASR engine. Must be called before transcription.
-func (f *FluidAudio) InitASR() error {
-	rc := C.fluidaudio_initialize_asr(f.ptr)
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "initialize_asr failed"}
-	}
-	return nil
-}
-
-// TranscribeFile transcribes speech from an audio file.
-func (f *FluidAudio) TranscribeFile(path string) (*AsrResult, error) {
-	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-
-	var cText *C.char
-	var confidence C.float
-	var duration, processingTime C.double
-	var rtfx C.float
-
-	rc := C.fluidaudio_transcribe_file(f.ptr, cPath,
-		&cText, &confidence, &duration, &processingTime, &rtfx)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "transcribe_file failed"}
-	}
-
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-
-	return &AsrResult{
-		Text:           text,
-		Confidence:     float32(confidence),
-		Duration:       float64(duration),
-		ProcessingTime: float64(processingTime),
-		RTFx:           float32(rtfx),
-	}, nil
-}
-
-// TranscribeSamples transcribes speech from raw float32 audio samples (16kHz mono).
-func (f *FluidAudio) TranscribeSamples(samples []float32) (*AsrResult, error) {
-	if len(samples) == 0 {
-		return nil, &FluidAudioError{Code: -1, Message: "empty samples"}
-	}
-
-	var cText *C.char
-	var confidence C.float
-	var duration, processingTime C.double
-	var rtfx C.float
-
-	rc := C.fluidaudio_transcribe_samples(f.ptr,
-		(*C.float)(unsafe.Pointer(&samples[0])),
-		C.uint(len(samples)),
-		&cText, &confidence, &duration, &processingTime, &rtfx)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "transcribe_samples failed"}
-	}
-
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-
-	return &AsrResult{
-		Text:           text,
-		Confidence:     float32(confidence),
-		Duration:       float64(duration),
-		ProcessingTime: float64(processingTime),
-		RTFx:           float32(rtfx),
-	}, nil
-}
-
-// IsASRAvailable returns whether the ASR engine is initialized and ready.
-func (f *FluidAudio) IsASRAvailable() bool {
-	return C.fluidaudio_is_asr_available(f.ptr) == 1
-}
-
-// --- Streaming ASR ---
-
-// InitStreamingASR initializes the streaming ASR engine.
-func (f *FluidAudio) InitStreamingASR() error {
-	rc := C.fluidaudio_initialize_streaming_asr(f.ptr)
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "initialize_streaming_asr failed"}
-	}
-	return nil
-}
-
-// StreamingASRStart begins a new streaming ASR session.
-func (f *FluidAudio) StreamingASRStart() error {
-	rc := C.fluidaudio_streaming_asr_start(f.ptr)
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "streaming_asr_start failed"}
-	}
-	return nil
-}
-
-// StreamingASRFeed feeds audio samples into the streaming ASR session.
-func (f *FluidAudio) StreamingASRFeed(samples []float32) error {
-	if len(samples) == 0 {
-		return nil
-	}
-	rc := C.fluidaudio_streaming_asr_feed(f.ptr,
-		(*C.float)(unsafe.Pointer(&samples[0])),
-		C.uint(len(samples)))
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "streaming_asr_feed failed"}
-	}
-	return nil
-}
-
-// StreamingASRFinish completes the streaming ASR session and returns the final text.
-func (f *FluidAudio) StreamingASRFinish() (string, error) {
-	var cText *C.char
-	rc := C.fluidaudio_streaming_asr_finish(f.ptr, &cText)
-	if rc != 0 {
-		return "", &FluidAudioError{Code: int32(rc), Message: "streaming_asr_finish failed"}
-	}
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-	return text, nil
-}
-
-// TranscribeFileStreaming transcribes a file using the streaming engine.
-func (f *FluidAudio) TranscribeFileStreaming(path string) (*AsrResult, error) {
-	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-
-	var cText *C.char
-	var confidence C.float
-	var duration, processingTime C.double
-	var rtfx C.float
-
-	rc := C.fluidaudio_transcribe_file_streaming(f.ptr, cPath,
-		&cText, &confidence, &duration, &processingTime, &rtfx)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "transcribe_file_streaming failed"}
-	}
-
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-
-	return &AsrResult{
-		Text:           text,
-		Confidence:     float32(confidence),
-		Duration:       float64(duration),
-		ProcessingTime: float64(processingTime),
-		RTFx:           float32(rtfx),
-	}, nil
-}
-
-// IsStreamingASRAvailable returns whether the streaming ASR engine is initialized.
-func (f *FluidAudio) IsStreamingASRAvailable() bool {
-	return C.fluidaudio_is_streaming_asr_available(f.ptr) == 1
-}
-
-// --- VAD ---
-
-// InitVAD initializes the Voice Activity Detection engine.
-func (f *FluidAudio) InitVAD(threshold float32) error {
-	rc := C.fluidaudio_initialize_vad(f.ptr, C.float(threshold))
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "initialize_vad failed"}
-	}
-	return nil
-}
-
-// IsVADAvailable returns whether the VAD engine is initialized.
-func (f *FluidAudio) IsVADAvailable() bool {
-	return C.fluidaudio_is_vad_available(f.ptr) == 1
 }
 
 // --- Diarization ---
 
 // DiarizationConfig holds configuration for speaker diarization.
 type DiarizationConfig struct {
-	// Threshold is the clustering distance threshold (default 0.6).
-	// Higher = fewer speakers, lower = more speakers. Range: (0, √2].
-	Threshold float64
-	// MinSpeakers sets the minimum number of speakers. 0 means no constraint.
-	MinSpeakers int
-	// MaxSpeakers sets the maximum number of speakers. 0 means no constraint.
-	MaxSpeakers int
+	// OnsetThreshold is the probability threshold to start a speech segment (default 0.5).
+	// Higher = fewer false-positive speech onsets.
+	OnsetThreshold float32
+	// OffsetThreshold is the probability threshold to end a speech segment (default 0.5).
+	// Lower = segments sustained longer through probability dips.
+	OffsetThreshold float32
+	// OnsetPadFrames is the number of frames to pad before each speech onset (default 0).
+	OnsetPadFrames int32
+	Compute        ComputeType
+	// Variant selects the pre-trained model variant (default VariantDIHARD3).
+	Variant DiarizationVariant
 }
 
+type ComputeType uint8
+
+const (
+	CPUOnly ComputeType = iota
+	CPUAndNeuralEngine
+	CPUAndGPU
+	All
+)
+
 // InitDiarization initializes the speaker diarization engine.
-// Pass nil for default config (threshold=0.6, no speaker constraints).
+// Pass nil for default config (onsetThreshold=0.5, offsetThreshold=0.5, onsetPadFrames=0).
 func (f *FluidAudio) InitDiarization(cfg *DiarizationConfig) error {
-	threshold := 0.6
-	var minSpeakers, maxSpeakers C.int32_t
+	var onsetThreshold float32 = 0.5
+	var offsetThreshold float32 = 0.5
+	var onsetPadFrames int32 = 0
+	compute := All
+	variant := VariantDIHARD3
 	if cfg != nil {
-		if cfg.Threshold > 0 {
-			threshold = cfg.Threshold
+		if cfg.OnsetThreshold > 0 {
+			onsetThreshold = cfg.OnsetThreshold
 		}
-		minSpeakers = C.int32_t(cfg.MinSpeakers)
-		maxSpeakers = C.int32_t(cfg.MaxSpeakers)
+		if cfg.OffsetThreshold > 0 {
+			offsetThreshold = cfg.OffsetThreshold
+		}
+		onsetPadFrames = cfg.OnsetPadFrames
+		compute = cfg.Compute
+		variant = cfg.Variant
 	}
-	rc := C.fluidaudio_initialize_diarization(f.ptr, C.double(threshold), minSpeakers, maxSpeakers)
+	rc := C.fluidaudio_initialize_diarization(f.ptr, C.float(onsetThreshold), C.float(offsetThreshold), C.int(onsetPadFrames), C.int(compute), C.int(variant))
 	if rc != 0 {
 		return &FluidAudioError{Code: int32(rc), Message: "initialize_diarization failed"}
 	}
 	return nil
 }
 
-// DiarizeFile performs speaker diarization on an audio file.
-func (f *FluidAudio) DiarizeFile(path string) ([]DiarizationSegment, error) {
+// DiarizeOffline performs speaker diarization on an audio file.
+func (f *FluidAudio) DiarizeOffline(path string) ([]DiarizationSegment, error) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 
-	var speakerIds **C.char
-	var startTimes, endTimes, qualityScores *C.float
+	var speakerIDs *C.int
+	var startTimes, endTimes *C.float
 	var count C.uint
-
-	rc := C.fluidaudio_diarize_file(f.ptr, cPath,
-		&speakerIds, &startTimes, &endTimes, &qualityScores, &count)
+	rc := C.fluidaudio_diarize_offline(f.ptr, cPath, &speakerIDs, &startTimes, &endTimes, &count)
 	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "diarize_file failed"}
+		return nil, &FluidAudioError{Code: int32(rc), Message: "fluidaudio_diarize_offline failed"}
 	}
-	defer C.fluidaudio_free_diarization_result(speakerIds, startTimes, endTimes, qualityScores, count)
+	defer C.fluidaudio_free_diarize_offline(speakerIDs, startTimes, endTimes)
 
 	n := int(count)
 	if n == 0 {
 		return nil, nil
 	}
-
 	segments := make([]DiarizationSegment, n)
-	ids := unsafe.Slice(speakerIds, n)
+	ids := unsafe.Slice(speakerIDs, n)
 	starts := unsafe.Slice(startTimes, n)
 	ends := unsafe.Slice(endTimes, n)
-	scores := unsafe.Slice(qualityScores, n)
-
 	for i := 0; i < n; i++ {
 		segments[i] = DiarizationSegment{
-			SpeakerID:    C.GoString(ids[i]),
-			StartTime:    float32(starts[i]),
-			EndTime:      float32(ends[i]),
-			QualityScore: float32(scores[i]),
+			SpeakerID: int32(ids[i]),
+			StartTime: float32(starts[i]),
+			EndTime:   float32(ends[i]),
 		}
 	}
+
 	return segments, nil
 }
 
-// IsDiarizationAvailable returns whether diarization is initialized.
-func (f *FluidAudio) IsDiarizationAvailable() bool {
-	return C.fluidaudio_is_diarization_available(f.ptr) == 1
-}
-
-// --- Qwen3 ASR ---
-
-// InitQwen3ASR initializes the Qwen3 ASR engine. Requires macOS 15+ or iOS 18+.
-func (f *FluidAudio) InitQwen3ASR() error {
-	rc := C.fluidaudio_initialize_qwen3_asr(f.ptr)
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "initialize_qwen3_asr failed"}
-	}
-	return nil
-}
-
-// Qwen3TranscribeFile transcribes a file using the Qwen3 model.
-// Pass nil for language to use automatic detection.
-func (f *FluidAudio) Qwen3TranscribeFile(path string, language *string) (*AsrResult, error) {
-	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-
-	var cLang *C.char
-	if language != nil {
-		cLang = C.CString(*language)
-		defer C.free(unsafe.Pointer(cLang))
-	}
-
-	var cText *C.char
-	var confidence C.float
-	var duration, processingTime C.double
-	var rtfx C.float
-
-	rc := C.fluidaudio_qwen3_transcribe_file(f.ptr, cPath, cLang,
-		&cText, &confidence, &duration, &processingTime, &rtfx)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "qwen3_transcribe_file failed"}
-	}
-
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-
-	return &AsrResult{
-		Text:           text,
-		Confidence:     float32(confidence),
-		Duration:       float64(duration),
-		ProcessingTime: float64(processingTime),
-		RTFx:           float32(rtfx),
-	}, nil
-}
-
-// Qwen3TranscribeSamples transcribes raw audio samples using the Qwen3 model.
-// Pass nil for language to use automatic detection.
-func (f *FluidAudio) Qwen3TranscribeSamples(samples []float32, language *string) (*AsrResult, error) {
-	if len(samples) == 0 {
-		return nil, &FluidAudioError{Code: -1, Message: "empty samples"}
-	}
-
-	var cLang *C.char
-	if language != nil {
-		cLang = C.CString(*language)
-		defer C.free(unsafe.Pointer(cLang))
-	}
-
-	var cText *C.char
-	var confidence C.float
-	var duration, processingTime C.double
-	var rtfx C.float
-
-	rc := C.fluidaudio_qwen3_transcribe_samples(f.ptr,
-		(*C.float)(unsafe.Pointer(&samples[0])),
-		C.uint(len(samples)),
-		cLang, &cText, &confidence, &duration, &processingTime, &rtfx)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "qwen3_transcribe_samples failed"}
-	}
-
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-
-	return &AsrResult{
-		Text:           text,
-		Confidence:     float32(confidence),
-		Duration:       float64(duration),
-		ProcessingTime: float64(processingTime),
-		RTFx:           float32(rtfx),
-	}, nil
-}
-
-// IsQwen3ASRAvailable returns whether the Qwen3 ASR engine is initialized.
-func (f *FluidAudio) IsQwen3ASRAvailable() bool {
-	return C.fluidaudio_is_qwen3_asr_available(f.ptr) == 1
-}
-
-// --- Qwen3 Streaming ---
-
-// InitQwen3Streaming initializes the Qwen3 streaming engine.
-func (f *FluidAudio) InitQwen3Streaming() error {
-	rc := C.fluidaudio_initialize_qwen3_streaming(f.ptr)
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "initialize_qwen3_streaming failed"}
-	}
-	return nil
-}
-
-// Qwen3StreamingStart begins a new Qwen3 streaming session.
-// Pass nil for language to use automatic detection.
-func (f *FluidAudio) Qwen3StreamingStart(language *string, minAudioSec, chunkSec, maxAudioSec float64) error {
-	var cLang *C.char
-	if language != nil {
-		cLang = C.CString(*language)
-		defer C.free(unsafe.Pointer(cLang))
-	}
-
-	rc := C.fluidaudio_qwen3_streaming_start(f.ptr, cLang,
-		C.double(minAudioSec), C.double(chunkSec), C.double(maxAudioSec))
-	if rc != 0 {
-		return &FluidAudioError{Code: int32(rc), Message: "qwen3_streaming_start failed"}
-	}
-	return nil
-}
-
-// Qwen3StreamingFeed feeds audio samples into the Qwen3 streaming session.
-// Returns partial transcription text if available, or nil if no partial result yet.
-func (f *FluidAudio) Qwen3StreamingFeed(samples []float32) (*string, error) {
-	if len(samples) == 0 {
-		return nil, nil
-	}
-
-	var cPartial *C.char
-	rc := C.fluidaudio_qwen3_streaming_feed(f.ptr,
-		(*C.float)(unsafe.Pointer(&samples[0])),
-		C.uint(len(samples)),
-		&cPartial)
-	if rc != 0 {
-		return nil, &FluidAudioError{Code: int32(rc), Message: "qwen3_streaming_feed failed"}
-	}
-
-	if cPartial == nil {
-		return nil, nil
-	}
-
-	text := C.GoString(cPartial)
-	C.fluidaudio_free_string(cPartial)
-	return &text, nil
-}
-
-// Qwen3StreamingFinish completes the Qwen3 streaming session and returns the final text.
-func (f *FluidAudio) Qwen3StreamingFinish() (string, error) {
-	var cText *C.char
-	rc := C.fluidaudio_qwen3_streaming_finish(f.ptr, &cText)
-	if rc != 0 {
-		return "", &FluidAudioError{Code: int32(rc), Message: "qwen3_streaming_finish failed"}
-	}
-	text := C.GoString(cText)
-	C.fluidaudio_free_string(cText)
-	return text, nil
-}
-
-// IsQwen3StreamingAvailable returns whether the Qwen3 streaming engine is initialized.
-func (f *FluidAudio) IsQwen3StreamingAvailable() bool {
-	return C.fluidaudio_is_qwen3_streaming_available(f.ptr) == 1
-}
-
-// --- System Info ---
+/// --- System Info ---
 
 // SystemInfo returns platform information.
 func (f *FluidAudio) SystemInfo() SystemInfo {

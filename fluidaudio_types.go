@@ -11,12 +11,21 @@ type AsrResult struct {
 	RTFx           float32
 }
 
+// DiarizationVariant selects the pre-trained diarization model variant.
+type DiarizationVariant int32
+
+const (
+	VariantAMI      DiarizationVariant = 0
+	VariantCallhome DiarizationVariant = 1
+	VariantDIHARD2  DiarizationVariant = 2
+	VariantDIHARD3  DiarizationVariant = 3 // default
+)
+
 // DiarizationSegment represents a single speaker segment.
 type DiarizationSegment struct {
-	SpeakerID    string
-	StartTime    float32
-	EndTime      float32
-	QualityScore float32
+	SpeakerID int32
+	StartTime float32
+	EndTime   float32
 }
 
 // SystemInfo contains platform information.
