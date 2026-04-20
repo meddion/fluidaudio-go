@@ -49,32 +49,6 @@ func (f *FluidAudio) Close() {
 	f.done = true
 }
 
-// --- Diarization ---
-
-// DiarizationConfig holds configuration for speaker diarization.
-type DiarizationConfig struct {
-	// OnsetThreshold is the probability threshold to start a speech segment (default 0.5).
-	// Higher = fewer false-positive speech onsets.
-	OnsetThreshold float32
-	// OffsetThreshold is the probability threshold to end a speech segment (default 0.5).
-	// Lower = segments sustained longer through probability dips.
-	OffsetThreshold float32
-	// OnsetPadFrames is the number of frames to pad before each speech onset (default 0).
-	OnsetPadFrames int32
-	Compute        ComputeType
-	// Variant selects the pre-trained model variant (default VariantDIHARD3).
-	Variant DiarizationVariant
-}
-
-type ComputeType uint8
-
-const (
-	CPUOnly ComputeType = iota
-	CPUAndNeuralEngine
-	CPUAndGPU
-	All
-)
-
 // InitDiarization initializes the speaker diarization engine.
 // Pass nil for default config (onsetThreshold=0.5, offsetThreshold=0.5, onsetPadFrames=0).
 func (f *FluidAudio) InitDiarization(cfg *DiarizationConfig) error {
@@ -113,28 +87,88 @@ func (f *FluidAudio) DiarizeOffline(path string) ([]DiarizationSegment, error) {
 	if rc != 0 {
 		return nil, &FluidAudioError{Code: int32(rc), Message: "fluidaudio_diarize_offline failed"}
 	}
-	defer C.fluidaudio_free_diarize_offline(speakerIDs, startTimes, endTimes)
+	n := int(count)
+	if n == 0 {
+		return nil, nil
+	}
+	defer C.fluidaudio_free_segments(speakerIDs, startTimes, endTimes)
+
+	return cSegmentsToGo(speakerIDs, startTimes, endTimes, n), nil
+}
+
+// --- Streaming Diarization ---
+
+// ProcessAudio sends a chunk of audio samples to the streaming diarizer.
+// sourceSampleRate is the sample rate of the input audio (e.g. 16000).
+// Pass 0 to let the diarizer use its native rate.
+// Returns only finalized (confirmed) segments. Returns nil if not enough audio has accumulated.
+func (f *FluidAudio) ProcessAudio(samples []float32, sourceSampleRate float64) ([]DiarizationSegment, error) {
+	if len(samples) == 0 {
+		return nil, nil
+	}
+
+	var speakerIDs *C.int
+	var startTimes, endTimes *C.float
+	var count C.uint
+
+	rc := C.fluidaudio_diarize_process_audio(
+		f.ptr,
+		(*C.float)(unsafe.Pointer(&samples[0])),
+		C.uint(len(samples)),
+		C.double(sourceSampleRate),
+		&speakerIDs, &startTimes, &endTimes, &count,
+	)
+	if rc != 0 {
+		return nil, &FluidAudioError{Code: int32(rc), Message: "diarize_process_audio failed"}
+	}
 
 	n := int(count)
 	if n == 0 {
 		return nil, nil
 	}
-	segments := make([]DiarizationSegment, n)
-	ids := unsafe.Slice(speakerIDs, n)
-	starts := unsafe.Slice(startTimes, n)
-	ends := unsafe.Slice(endTimes, n)
-	for i := 0; i < n; i++ {
-		segments[i] = DiarizationSegment{
-			SpeakerID: int32(ids[i]),
-			StartTime: float32(starts[i]),
-			EndTime:   float32(ends[i]),
-		}
-	}
+	defer C.fluidaudio_free_segments(speakerIDs, startTimes, endTimes)
 
-	return segments, nil
+	return cSegmentsToGo(speakerIDs, startTimes, endTimes, n), nil
 }
 
-/// --- System Info ---
+// FinalizeAudio flushes remaining audio through the diarizer, returns all final segments,
+// and resets the streaming state. The diarizer remains initialized for a new stream.
+func (f *FluidAudio) FinalizeAudio() ([]DiarizationSegment, error) {
+	var speakerIDs *C.int
+	var startTimes, endTimes *C.float
+	var count C.uint
+
+	rc := C.fluidaudio_diarize_finalize(f.ptr, &speakerIDs, &startTimes, &endTimes, &count)
+	if rc != 0 {
+		return nil, &FluidAudioError{Code: int32(rc), Message: "diarize_finalize failed"}
+	}
+
+	n := int(count)
+	if n == 0 {
+		return nil, nil
+	}
+	defer C.fluidaudio_free_segments(speakerIDs, startTimes, endTimes)
+
+	return cSegmentsToGo(speakerIDs, startTimes, endTimes, n), nil
+}
+
+func cSegmentsToGo(ids *C.int, starts, ends *C.float, n int) []DiarizationSegment {
+	if n == 0 {
+		return nil
+	}
+	segments := make([]DiarizationSegment, n)
+	cIDs := unsafe.Slice(ids, n)
+	cStarts := unsafe.Slice(starts, n)
+	cEnds := unsafe.Slice(ends, n)
+	for i := 0; i < n; i++ {
+		segments[i] = DiarizationSegment{
+			SpeakerID: int32(cIDs[i]),
+			StartTime: float32(cStarts[i]),
+			EndTime:   float32(cEnds[i]),
+		}
+	}
+	return segments
+}
 
 // SystemInfo returns platform information.
 func (f *FluidAudio) SystemInfo() SystemInfo {

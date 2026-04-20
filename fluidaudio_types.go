@@ -2,14 +2,29 @@ package fluidaudio
 
 import "fmt"
 
-// AsrResult contains the result of a speech recognition operation.
-type AsrResult struct {
-	Text           string
-	Confidence     float32
-	Duration       float64
-	ProcessingTime float64
-	RTFx           float32
+// DiarizationConfig holds configuration for speaker diarization.
+type DiarizationConfig struct {
+	// OnsetThreshold is the probability threshold to start a speech segment (default 0.5).
+	// Higher = fewer false-positive speech onsets.
+	OnsetThreshold float32
+	// OffsetThreshold is the probability threshold to end a speech segment (default 0.5).
+	// Lower = segments sustained longer through probability dips.
+	OffsetThreshold float32
+	// OnsetPadFrames is the number of frames to pad before each speech onset (default 0).
+	OnsetPadFrames int32
+	Compute        ComputeType
+	// Variant selects the pre-trained model variant (default VariantDIHARD3).
+	Variant DiarizationVariant
 }
+
+type ComputeType uint8
+
+const (
+	CPUOnly ComputeType = iota
+	CPUAndNeuralEngine
+	CPUAndGPU
+	All
+)
 
 // DiarizationVariant selects the pre-trained diarization model variant.
 type DiarizationVariant int32

@@ -177,8 +177,93 @@ public func fluidaudio_initialize_diarization(
     }
 }
 
-@_cdecl("fluidaudio_free_diarize_offline")
-public func fluidaudio_free_diarize_offline(
+/// Helper to write segment arrays into pre-allocated C output pointers.
+private func writeSegments(
+    _ segments: [DiarizerSegment],
+    ids: UnsafeMutablePointer<UnsafeMutablePointer<Int32>>,
+    starts: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    ends: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    count: UnsafeMutablePointer<UInt32>
+) {
+    let n = segments.count
+    count.pointee = UInt32(n)
+    if n > 0 {
+        let idsPtr = UnsafeMutablePointer<Int32>.allocate(capacity: n)
+        let startsPtr = UnsafeMutablePointer<Float>.allocate(capacity: n)
+        let endsPtr = UnsafeMutablePointer<Float>.allocate(capacity: n)
+        for (i, seg) in segments.enumerated() {
+            idsPtr[i] = Int32(seg.speakerIndex)
+            startsPtr[i] = seg.startTime
+            endsPtr[i] = seg.endTime
+        }
+        ids.pointee = idsPtr
+        starts.pointee = startsPtr
+        ends.pointee = endsPtr
+    }
+}
+
+@_cdecl("fluidaudio_diarize_process_audio")
+public func fluidaudio_diarize_process_audio(
+    _ diarizer_ptr: UnsafeMutableRawPointer,
+    _ samples: UnsafePointer<Float>,
+    _ sampleCount: UInt32,
+    _ sourceSampleRate: Double,
+    _ outSpeakerIds: UnsafeMutablePointer<UnsafeMutablePointer<Int32>>,
+    _ outStartTimes: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    _ outEndTimes: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    _ outCount: UnsafeMutablePointer<UInt32>
+) -> Int32 {
+    let diarizer = Unmanaged<FluidAudioDiarizer>.fromOpaque(diarizer_ptr).takeUnretainedValue()
+    let chunk = Array(UnsafeBufferPointer(start: samples, count: Int(sampleCount)))
+    let rate: Double? = sourceSampleRate > 0 ? sourceSampleRate : nil
+
+    do {
+        let update = try diarizer.processAudio(chunk, sourceSample: rate)
+        if let update = update {
+            writeSegments(
+                update.finalizedSegments,
+                ids: outSpeakerIds, starts: outStartTimes, ends: outEndTimes,
+                count: outCount)
+        } else {
+            outCount.pointee = 0
+        }
+        return 0
+    } catch {
+        print("Streaming diarize error: \(error)")
+        return -1
+    }
+}
+
+@_cdecl("fluidaudio_diarize_finalize")
+public func fluidaudio_diarize_finalize(
+    _ diarizer_ptr: UnsafeMutableRawPointer,
+    _ outSpeakerIds: UnsafeMutablePointer<UnsafeMutablePointer<Int32>>,
+    _ outStartTimes: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    _ outEndTimes: UnsafeMutablePointer<UnsafeMutablePointer<Float>>,
+    _ outCount: UnsafeMutablePointer<UInt32>
+) -> Int32 {
+    let diarizer = Unmanaged<FluidAudioDiarizer>.fromOpaque(diarizer_ptr).takeUnretainedValue()
+
+    do {
+        let timeline = try diarizer.finilizeAudio()
+        var segments: [DiarizerSegment] = []
+        for (_, speaker) in timeline.speakers {
+            segments.append(contentsOf: speaker.finalizedSegments)
+        }
+        segments.sort { $0.startTime < $1.startTime }
+        writeSegments(
+            segments,
+            ids: outSpeakerIds, starts: outStartTimes, ends: outEndTimes,
+            count: outCount)
+        return 0
+    } catch {
+        print("Finalize diarize error: \(error)")
+        return -1
+    }
+}
+
+@_cdecl("fluidaudio_free_segments")
+public func fluidaudio_free_segments(
     _ speakerIds: UnsafeMutablePointer<Int32>?,
     _ startTimes: UnsafeMutablePointer<Float>?,
     _ endTimes: UnsafeMutablePointer<Float>?

@@ -1,10 +1,17 @@
 # fluidaudio-go
 
-Go bindings for [FluidAudio](https://github.com/FluidInference/FluidAudio) — ASR, VAD, Speaker Diarization, and Qwen3 on Apple platforms.
+Go bindings for [FluidAudio](https://github.com/FluidInference/FluidAudio). Right now supports only speaker diarization on Apple platforms. Uses LS-EEND (Linear Streaming End-to-End Neural Diarization) via CoreML.
+
+## Features
+
+- **Offline diarization** — process a complete audio file
+- **Streaming diarization** — feed audio chunks incrementally, get finalized segments as they're confirmed
+- **Configurable** — onset/offset thresholds, onset padding, compute units (CPU/GPU/Neural Engine), model variants (AMI, CALLHOME, DIHARD II/III)
+- **System info** — platform, chip name, memory, Apple Silicon detection
 
 ## Requirements
 
-- macOS 14+ (macOS 15+ for Qwen3)
+- macOS 14+
 - Apple Silicon recommended
 - Swift 5.10+
 - Go 1.21+
@@ -12,72 +19,72 @@ Go bindings for [FluidAudio](https://github.com/FluidInference/FluidAudio) — A
 ## Build
 
 ```bash
-# Build the Swift static library (one-time, or after Swift changes)
+# Build Swift static library + Go package
 make
 
-# Build Go package
-go build ./...
-
 # Run tests
-go test ./...
+make test
 
 # Run integration tests (requires model downloads)
-go test -tags integration ./...
+make test-integration
 ```
 
 ## Usage
 
+### Offline diarization
+
 ```go
-package main
+fa, _ := fluidaudio.New()
+defer fa.Close()
 
-import (
-	"fmt"
-	"log"
+fa.InitDiarization(nil) // default config
 
-	"github.com/meddion/fluidaudio-go"
-)
-
-func main() {
-	fa, err := fluidaudio.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer fa.Close()
-
-	// Print system info
-	info := fa.SystemInfo()
-	fmt.Printf("Running on %s (%s)\n", info.Platform, info.ChipName)
-
-	// Initialize and transcribe
-	if err := fa.InitASR(); err != nil {
-		log.Fatal(err)
-	}
-
-	result, err := fa.TranscribeFile("audio.wav")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Text: %s (confidence: %.2f)\n", result.Text, result.Confidence)
+segments, _ := fa.DiarizeOffline("meeting.wav")
+for _, seg := range segments {
+    fmt.Printf("Speaker %d: %.2fs - %.2fs\n", seg.SpeakerID, seg.StartTime, seg.EndTime)
 }
 ```
 
-## Features
+### Streaming diarization
 
-- **ASR** — File and sample-based transcription (Parakeet TDT, English-optimized)
-- **Streaming ASR** — Low-memory streaming transcription
-- **VAD** — Voice Activity Detection
-- **Speaker Diarization** — Identify who spoke when
-- **Qwen3 ASR** — Multilingual transcription (30+ languages)
-- **Qwen3 Streaming** — Real-time multilingual streaming
-- **System Info** — Platform, chip, memory queries
+```go
+fa, _ := fluidaudio.New()
+defer fa.Close()
+
+fa.InitDiarization(nil)
+
+// Feed audio chunks as they arrive
+for chunk := range audioChunks {
+    segments, _ := fa.ProcessAudio(chunk, 16000)
+    for _, seg := range segments {
+        fmt.Printf("Speaker %d: %.2fs - %.2fs\n", seg.SpeakerID, seg.StartTime, seg.EndTime)
+    }
+}
+
+// Flush remaining audio and get all final segments
+finalSegments, _ := fa.FinalizeAudio()
+```
+
+### Configuration
+
+```go
+fa.InitDiarization(&fluidaudio.DiarizationConfig{
+    OnsetThreshold:  0.5,              // probability to start a speech segment
+    OffsetThreshold: 0.5,              // probability to end a speech segment
+    OnsetPadFrames:  0,                // frames to pad before speech onset
+    Compute:         fluidaudio.All,   // CPU, CPUAndGPU, CPUAndNeuralEngine, All
+    Variant:         fluidaudio.VariantAMI, // AMI, CALLHOME, DIHARD2, DIHARD3
+})
+```
 
 ## Examples
 
 ```bash
-go run ./examples/transcribe/ audio.wav
-go run ./examples/streaming/ audio.wav
+# Offline diarization
 go run ./examples/diarize/ audio.wav
+
+# Streaming diarization (simulated from file)
+go run ./examples/streaming-diarize/ audio.wav
 ```
 
 ## License

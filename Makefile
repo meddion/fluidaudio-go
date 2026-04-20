@@ -19,5 +19,8 @@ test-integration: swift
 example-diarize: swift
 	go run ./examples/diarize/main.go testdata/test.wav
 
+example-diarize-stream: swift
+	go run ./examples/streaming-diarize/main.go testdata/test.wav
+
 clean:
 	rm -rf lib
