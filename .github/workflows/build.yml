@@ -1,0 +1,25 @@
+name: Build Swift Bridge
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Swift static library
+        run: swift build -c release --build-path lib
+
+      - name: Verify artifact exists
+        run: test -f lib/release/libFluidAudioBridge.a
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libFluidAudioBridge
+          path: lib/release/libFluidAudioBridge.a
+          if-no-files-found: error
