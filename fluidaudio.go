@@ -2,8 +2,9 @@ package fluidaudio
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/include
-#cgo LDFLAGS: -L${SRCDIR}/lib/release -lFluidAudioBridge
+#cgo LDFLAGS: -L${SRCDIR}/lib/release -lFluidAudioBridgeA
 #cgo LDFLAGS: -L/Library/Developer/CommandLineTools/usr/lib/swift/macosx
+#cgo LDFLAGS: -Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib/swift/macosx -Wl,-rpath,/usr/lib/swift
 #cgo LDFLAGS: -framework Foundation -framework AVFoundation
 #cgo LDFLAGS: -framework CoreML -framework Accelerate
 #cgo LDFLAGS: -framework Metal -framework MetalPerformanceShaders
