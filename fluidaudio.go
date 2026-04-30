@@ -58,6 +58,9 @@ func (f *FluidAudio) InitDiarization(cfg *DiarizationConfig) error {
 	var onsetPadFrames int32 = 0
 	compute := All
 	variant := VariantDIHARD3
+	var offsetPadFrames int32 = 0
+	var minFramesOn int32 = 0
+	var minFramesOff int32 = 0
 	if cfg != nil {
 		if cfg.OnsetThreshold > 0 {
 			onsetThreshold = cfg.OnsetThreshold
@@ -66,10 +69,13 @@ func (f *FluidAudio) InitDiarization(cfg *DiarizationConfig) error {
 			offsetThreshold = cfg.OffsetThreshold
 		}
 		onsetPadFrames = cfg.OnsetPadFrames
+		offsetPadFrames = cfg.OffsetPadFrames
+		minFramesOn = cfg.MinFramesOn
+		minFramesOff = cfg.MinFramesOff
 		compute = cfg.Compute
 		variant = cfg.Variant
 	}
-	rc := C.fluidaudio_initialize_diarization(f.ptr, C.float(onsetThreshold), C.float(offsetThreshold), C.int(onsetPadFrames), C.int(compute), C.int(variant))
+	rc := C.fluidaudio_initialize_diarization(f.ptr, C.float(onsetThreshold), C.float(offsetThreshold), C.int(onsetPadFrames), C.int(offsetPadFrames), C.int(minFramesOn), C.int(minFramesOff), C.int(compute), C.int(variant))
 	if rc != 0 {
 		return &FluidAudioError{Code: int32(rc), Message: "initialize_diarization failed"}
 	}

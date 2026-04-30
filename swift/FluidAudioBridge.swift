@@ -152,6 +152,9 @@ public func fluidaudio_initialize_diarization(
     onset_threshold: Float32,
     offset_threshold: Float32,
     onset_pad_frames: Int32,
+    offset_pad_frames: Int32,
+    min_frames_on: Int32,
+    min_frames_off: Int32,
     compute_type: Int32,
     variant_type: Int32
 ) -> Int32 {
@@ -167,7 +170,10 @@ public func fluidaudio_initialize_diarization(
         let cfg = DiarizerTimelineConfig(
             onsetThreshold: onset_threshold,
             offsetThreshold: offset_threshold,
-            onsetPadFrames: Int(onset_pad_frames)
+            onsetPadFrames: Int(onset_pad_frames),
+            offsetPadFrames: Int(offset_pad_frames),
+            minFramesOn: Int(min_frames_on),
+            minFramesOff: Int(min_frames_off)
         )
         try diarizer.initializeDiarization(compute: compute, variant: variant, cfg: cfg)
         return 0

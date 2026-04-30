@@ -12,7 +12,13 @@ type DiarizationConfig struct {
 	OffsetThreshold float32
 	// OnsetPadFrames is the number of frames to pad before each speech onset (default 0).
 	OnsetPadFrames int32
-	Compute        ComputeType
+	// OffsetPadFrames is the number of frames to pad after each speech offset (default 0).
+	OffsetPadFrames int32
+	// MinFramesOn discards segments shorter than this many frames (default 0).
+	MinFramesOn int32
+	// MinFramesOff closes gaps shorter than this many frames (default 0).
+	MinFramesOff int32
+	Compute      ComputeType
 	// Variant selects the pre-trained model variant (default VariantDIHARD3).
 	Variant DiarizationVariant
 }

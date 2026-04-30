@@ -10,10 +10,10 @@ void fluidaudio_cleanup(void *ptr);
 void fluidaudio_free_string(char *s);
 
 // --- Diarization ---
-int32_t fluidaudio_initialize_diarization(void *ptr, float onset_threshold,
-                                          float offset_threshold,
-                                          int32_t onset_pad_frames,
-                                          int32_t compute, int32_t variant);
+int32_t fluidaudio_initialize_diarization(
+    void *ptr, float onset_threshold, float offset_threshold,
+    int32_t onset_pad_frames, int32_t offset_pad_frames, int32_t min_frames_on,
+    int32_t min_frames_off, int32_t compute, int32_t variant);
 int32_t fluidaudio_diarize_offline(void *ptr, const char *path,
                                    int32_t **out_speaker_ids,
                                    float **out_start_times,
